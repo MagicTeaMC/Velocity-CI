@@ -21,8 +21,6 @@ import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.proxy.protocol.MinecraftPacket;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.StateRegistry;
-import com.velocitypowered.proxy.protocol.packet.PluginMessage;
-import com.velocitypowered.proxy.protocol.packet.ResourcePackResponse;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -44,8 +42,7 @@ import org.jetbrains.annotations.NotNull;
  */
 public class PlayPacketQueueHandler extends ChannelDuplexHandler {
 
-  private final StateRegistry.PacketRegistry.ProtocolRegistry clientRegistry;
-  private final StateRegistry.PacketRegistry.ProtocolRegistry serverRegistry;
+  private final StateRegistry.PacketRegistry.ProtocolRegistry registry;
   private final Queue<MinecraftPacket> queue = PlatformDependent.newMpscQueue();
 
   /**
@@ -53,11 +50,9 @@ public class PlayPacketQueueHandler extends ChannelDuplexHandler {
    *
    * @param version the protocol version
    */
-  public PlayPacketQueueHandler(ProtocolVersion version) {
-    this.clientRegistry =
-        StateRegistry.CONFIG.getProtocolRegistry(ProtocolUtils.Direction.CLIENTBOUND, version);
-    this.serverRegistry =
-        StateRegistry.CONFIG.getProtocolRegistry(ProtocolUtils.Direction.SERVERBOUND, version);
+  public PlayPacketQueueHandler(ProtocolVersion version, ProtocolUtils.Direction direction) {
+    this.registry =
+        StateRegistry.CONFIG.getProtocolRegistry(direction, version);
   }
 
   @Override
@@ -70,17 +65,9 @@ public class PlayPacketQueueHandler extends ChannelDuplexHandler {
 
     // If the packet exists in the CONFIG state, we want to always
     // ensure that it gets sent out to the client
-    if (this.clientRegistry.containsPacket(((MinecraftPacket) msg))) {
+    if (this.registry.containsPacket(((MinecraftPacket) msg))) {
       ctx.write(msg, promise);
       return;
-    }
-
-    if (this.serverRegistry.containsPacket(((MinecraftPacket) msg))) {
-      MinecraftPacket packet = (MinecraftPacket) msg;
-      if (packet instanceof ResourcePackResponse || packet instanceof PluginMessage) {
-        ctx.write(msg, promise);
-        return;
-      }
     }
 
     // Otherwise, queue the packet
